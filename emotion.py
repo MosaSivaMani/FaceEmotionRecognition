@@ -24,19 +24,15 @@ def process_image(image):
         st.warning("No faces detected.")
         st.image(img_array, caption="No faces detected", use_column_width=True)
     else:
-        for i, (x, y, w, h) in enumerate(faces):
+        for (x, y, w, h) in faces:
             face_roi = img_array[y:y + h, x:x + w]
             try:
                 result = DeepFace.analyze(face_roi, actions=['emotion'], enforce_detection=False)
                 emotion = result[0]['dominant_emotion']
-                emotion_scores = result[0]['emotion']
             except Exception as e:
                 emotion = "Error"
-                emotion_scores = {}
             cv2.rectangle(img_array, (x, y), (x + w, y + h), (0,0,255), 2)
             cv2.putText(img_array, emotion, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,0), 2)
-            st.write(f"Face {i+1} at ({x},{y}):")
-            st.json(emotion_scores)
         st.image(img_array, caption="Detected Emotions", use_column_width=True)
 
 # Process uploaded image
