@@ -1,53 +1,50 @@
+import streamlit as st
 import cv2
+import numpy as np
 from deepface import DeepFace
+from PIL import Image
 
-# Load face cascade classifier
-face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+st.title("Face Emotion Recognition App")
+st.write("Upload an image or take a snapshot with your webcam to detect emotions on faces.")
 
-# Start capturing video
-cap = cv2.VideoCapture(0)
-if not cap.isOpened():
-    print("Cannot open camera")
-    exit()
+# --- Image Upload ---
+st.header("Detect from Uploaded Image")
+uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 
-while True:
-    # Capture frame-by-frame
-    ret, frame = cap.read()
-    if not ret:
-        print("Can't receive frame (stream end?). Exiting ...")
-        break
+# --- Webcam Input ---
+st.header("Detect from Webcam Snapshot")
+img_file_buffer = st.camera_input("Take a picture")
 
-    # Convert frame to grayscale
-    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+def process_image(image):
+    img_array = np.array(image)
+    gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(100, 100))
+    if len(faces) == 0:
+        st.warning("No faces detected.")
+        st.image(img_array, caption="No faces detected", use_column_width=True)
+    else:
+        for i, (x, y, w, h) in enumerate(faces):
+            face_roi = img_array[y:y + h, x:x + w]
+            try:
+                result = DeepFace.analyze(face_roi, actions=['emotion'], enforce_detection=False)
+                emotion = result[0]['dominant_emotion']
+                emotion_scores = result[0]['emotion']
+            except Exception as e:
+                emotion = "Error"
+                emotion_scores = {}
+            cv2.rectangle(img_array, (x, y), (x + w, y + h), (0,0,255), 2)
+            cv2.putText(img_array, emotion, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,0), 2)
+            st.write(f"Face {i+1} at ({x},{y}):")
+            st.json(emotion_scores)
+        st.image(img_array, caption="Detected Emotions", use_column_width=True)
 
-    # Convert grayscale frame to RGB format
-    rgb_frame = cv2.cvtColor(gray_frame, cv2.COLOR_GRAY2RGB)
+# Process uploaded image
+if uploaded_file is not None:
+    image = Image.open(uploaded_file).convert('RGB')
+    process_image(image)
 
-    # Detect faces in the frame
-    faces = face_cascade.detectMultiScale(gray_frame, scaleFactor=1.1, minNeighbors=5, minSize=(100, 100))
-
-    for (x, y, w, h) in faces:
-        # Extract the face ROI (Region of Interest)
-        face_roi = rgb_frame[y:y + h, x:x + w]
-
-        
-        # Perform emotion analysis on the face ROI
-        result = DeepFace.analyze(face_roi, actions=['emotion'], enforce_detection=False)
-
-        # Determine the dominant emotion
-        emotion = result[0]['dominant_emotion']
-
-        # Draw rectangle around face and label with predicted emotion
-        cv2.rectangle(frame, (x, y), (x + w, y + h), (0,0,255), 2)
-        cv2.putText(frame, emotion, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,0), 2)
-
-    # Display the resulting frame
-    cv2.imshow('Real-time Emotion Detection', frame)
-
-    # Press 'q' to exit
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-
-# Release the capture and close all windows
-cap.release()
-cv2.destroyAllWindows()
+# Process webcam image
+if img_file_buffer is not None:
+    image = Image.open(img_file_buffer).convert('RGB')
+    process_image(image)
